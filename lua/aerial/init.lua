@@ -322,7 +322,8 @@ M.refetch_symbols = function(bufnr)
     if backend then
       backend.fetch_symbols(bufnr)
     else
-      error("No aerial backend for buffer")
+      -- 注释掉该行，以适配我自己的延迟打开大纲，而不对无法获得来源的文件报错
+      -- error("No aerial backend for buffer")
     end
   end
 end
