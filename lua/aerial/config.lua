@@ -422,8 +422,15 @@ local islist = vim.islist or vim.tbl_islist
 local M = {}
 
 M.get_filetypes = function(bufnr)
-  local ft = vim.bo[bufnr or 0].filetype
-  return vim.split(ft, "%.")
+  local r, ft = pcall(function() return vim.bo[bufnr or 0].filetype end)
+    -- avoid error when buffer invalid
+    if r then
+        return vim.split(ft, "%.")
+    else 
+        local bufs = vim.api.nvim_list_bufs()
+        if #bufs > 0 then  vim.api.nvim_set_current_buf(bufs[1]) end
+        return {''}
+    end
 end
 
 ---@param name string
