@@ -111,7 +111,7 @@ function M:init(options)
   end
 end
 
----@param symbol aerial.Symbol
+---@param symbol aerial.SymbolView
 ---@param is_icon boolean
 ---@return string|nil
 function M:get_hl_group(symbol, is_icon)
@@ -166,7 +166,7 @@ function M:get_status_dense()
     local symbol = symbols[#symbols]
     local hl_group = self:get_hl_group(symbol, true)
     local icon = self:color_text(symbol.icon, hl_group)
-    status = string.format("%s %s", icon, status)
+    status = string.format("%s%s%s", icon, self.options.sep_icon, status)
   end
   return status
 end

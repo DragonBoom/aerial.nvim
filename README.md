@@ -24,10 +24,10 @@ https://user-images.githubusercontent.com/506791/122652728-18688500-d0f5-11eb-80
 
 ## Requirements
 
-- Neovim 0.8+ (for older versions, use the [nvim-0.5 branch](https://github.com/stevearc/aerial.nvim/tree/nvim-0.5))
+- Neovim 0.9+ (for older versions, use a [nvim-0.x branch](https://github.com/stevearc/conform.nvim/branches))
 - One or more of the following:
   - A working LSP setup (see [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig))
-  - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter) with languages installed
+  - Tree-sitter parsers
 
 ## Installation
 
@@ -144,12 +144,14 @@ In addition, you will need to have either Treesitter or a working LSP client. Yo
 - dart
 - elixir
 - go
+- groovy
 - help
 - html
 - java
 - javascript
 - json
 - julia
+- just
 - latex
 - lua
 - make
@@ -166,13 +168,17 @@ In addition, you will need to have either Treesitter or a working LSP client. Yo
 - scala
 - snakemake
 - solidity
+- starlark
 - teal
+- toml
 - tsx
 - typescript
 - usd
 - vim
 - vimdoc
+- xml
 - yaml
+- zig
 
 Don't see your language here? [Request support for
 it](https://github.com/stevearc/aerial.nvim/issues/new?assignees=stevearc&labels=enhancement&template=feature-request--treesitter-language-.md&title=)
@@ -205,7 +211,7 @@ it](https://github.com/stevearc/aerial.nvim/issues/new?assignees=stevearc&labels
 require("aerial").setup({
   -- Priority list of preferred backends for aerial.
   -- This can be a filetype map (see :help aerial-filetype-map)
-  backends = { "treesitter", "lsp", "markdown", "man" },
+  backends = { "treesitter", "lsp", "markdown", "asciidoc", "man" },
 
   layout = {
     -- These control the width of the aerial window.
@@ -349,6 +355,9 @@ require("aerial").setup({
   ignore = {
     -- Ignore unlisted buffers. See :help buflisted
     unlisted_buffers = false,
+
+    -- Ignore diff windows (setting to false will allow aerial in diff windows)
+    diff_windows = true,
 
     -- List of filetypes to ignore.
     filetypes = {},
@@ -517,9 +526,8 @@ require("aerial").setup({
   },
 
   lsp = {
-    -- Fetch document symbols when LSP diagnostics update.
-    -- If false, will update on buffer changes.
-    diagnostics_trigger_update = true,
+    -- If true, fetch document symbols when LSP diagnostics update.
+    diagnostics_trigger_update = false,
 
     -- Set to false to not update the symbols when there are LSP errors
     update_when_errors = true,
@@ -542,6 +550,11 @@ require("aerial").setup({
   },
 
   markdown = {
+    -- How long to wait (in ms) after a buffer change before updating
+    update_delay = 300,
+  },
+
+  asciidoc = {
     -- How long to wait (in ms) after a buffer change before updating
     update_delay = 300,
   },
@@ -586,27 +599,31 @@ option).
 
 You can activate the picker with `:Telescope aerial` or `:lua require("telescope").extensions.aerial.aerial()`
 
-If you want the command to autocomplete, you can load the extension first:
-
-```lua
-require("telescope").load_extension("aerial")
-```
-
 The extension can be customized with the following options:
 
 ```lua
 require("telescope").setup({
   extensions = {
     aerial = {
-      -- Display symbols as <root>.<parent>.<symbol>
-      show_nesting = {
-        ["_"] = false, -- This key will be the default
-        json = true, -- You can set the option for specific filetypes
-        yaml = true,
-      },
+      -- How to format the symbols
+      format_symbol = function(symbol_path, filetype)
+        if filetype == "json" or filetype == "yaml" then
+          return table.concat(symbol_path, ".")
+        else
+          return symbol_path[#symbol_path]
+        end
+      end,
+      -- Available modes: symbols, lines, both
+      show_columns = "both",
     },
   },
 })
+```
+
+If you want the command to autocomplete, you can load the extension first (this line must come after the setup section from above):
+
+```lua
+require("telescope").load_extension("aerial")
 ```
 
 ### fzf
@@ -738,7 +755,7 @@ When writing queries, the following captures and metadata are used by Aerial:
 - `@selection` - position to jump to when using Aerial for navigation, falls back to `@name` and `@symbol`
 - `@scope` - a node naming a scope for the match, its text is used to generate a custom "Comment" linked highlight for the entry, with exception of "public"
 
-    A `@scope` node with text "developers" will result in its entry in the tree having an "AerialDevelopers" highlight applied to it.
+  A `@scope` node with text "developers" will result in its entry in the tree having an "AerialDevelopers" highlight applied to it.
 
 - `scope` - a metadata value serving the same role as `@scope` capture, overriding aforementioned capture
 

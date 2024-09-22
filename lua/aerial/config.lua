@@ -1,7 +1,7 @@
 local default_options = {
   -- Priority list of preferred backends for aerial.
   -- This can be a filetype map (see :help aerial-filetype-map)
-  backends = { "treesitter", "lsp", "markdown", "man" },
+  backends = { "treesitter", "lsp", "markdown", "asciidoc", "man" },
 
   layout = {
     -- These control the width of the aerial window.
@@ -145,6 +145,9 @@ local default_options = {
   ignore = {
     -- Ignore unlisted buffers. See :help buflisted
     unlisted_buffers = false,
+
+    -- Ignore diff windows (setting to false will allow aerial in diff windows)
+    diff_windows = true,
 
     -- List of filetypes to ignore.
     filetypes = {},
@@ -313,9 +316,8 @@ local default_options = {
   },
 
   lsp = {
-    -- Fetch document symbols when LSP diagnostics update.
-    -- If false, will update on buffer changes.
-    diagnostics_trigger_update = true,
+    -- If true, fetch document symbols when LSP diagnostics update.
+    diagnostics_trigger_update = false,
 
     -- Set to false to not update the symbols when there are LSP errors
     update_when_errors = true,
@@ -338,6 +340,11 @@ local default_options = {
   },
 
   markdown = {
+    -- How long to wait (in ms) after a buffer change before updating
+    update_delay = 300,
+  },
+
+  asciidoc = {
     -- How long to wait (in ms) after a buffer change before updating
     update_delay = 300,
   },
@@ -410,6 +417,8 @@ local nerd_icons = {
   Collapsed     = " ",
 }
 
+---@diagnostic disable-next-line: deprecated
+local islist = vim.islist or vim.tbl_islist
 local M = {}
 
 M.get_filetypes = function(bufnr)
@@ -422,7 +431,7 @@ end
 ---@param default any
 local function create_filetype_opt_getter(name, option, default)
   local buffer_option_name = string.format("aerial_%s", name)
-  if type(option) ~= "table" or vim.tbl_islist(option) then
+  if type(option) ~= "table" or islist(option) then
     return function(bufnr)
       local has_buf_option, buf_option = pcall(vim.api.nvim_buf_get_var, bufnr, buffer_option_name)
       if has_buf_option then
@@ -495,7 +504,9 @@ M.setup = function(opts)
   if newconf.nerd_font == "auto" then
     local has_devicons = pcall(require, "nvim-web-devicons")
     local has_lspkind = pcall(require, "lspkind")
-    newconf.nerd_font = has_devicons or has_lspkind
+    pcall(require, "mini.icons")
+    local has_miniicons = vim.tbl_get(_G, "MiniIcons", "config", "style") == "glyph"
+    newconf.nerd_font = has_devicons or has_lspkind or has_miniicons
   end
 
   -- Add lookup to close_automatic_events
@@ -503,28 +514,12 @@ M.setup = function(opts)
     newconf.close_automatic_events[v] = i
   end
 
-  -- Undocumented use_lspkind option for tests. End users can simply provide
+  -- Undocumented use_icon_provider option for tests. End users can simply provide
   -- their own icons
-  if newconf.use_lspkind == nil then
-    newconf.use_lspkind = true
+  if newconf.use_icon_provider == nil then
+    newconf.use_icon_provider = true
   end
 
-  -- for backwards compatibility
-  for k, _ in pairs(default_options.lsp) do
-    if newconf[k] ~= nil then
-      vim.notify_once(
-        string.format(
-          "aerial.config.%s should be moved to aerial.config.lsp.%s (see :help aerial-options)\nThis shim will be removed on 2024-02-11",
-          k,
-          k
-        ),
-        vim.log.levels.WARN
-      )
-      ---@diagnostic disable-next-line assign-type-mismatch
-      newconf.lsp[k] = newconf[k]
-      newconf[k] = nil
-    end
-  end
   newconf.default_icons = newconf.nerd_font and nerd_icons or plain_icons
 
   if type(newconf.open_automatic) == "boolean" then
@@ -587,6 +582,31 @@ local function get_icon(kind, filetypes)
   return M.icons[kind]
 end
 
+local function get_icon_provider()
+  if not M.use_icon_provider then -- skip if icon provider not used
+    return false
+  end
+  -- prefer mini.icons
+  local _, mini_icons = pcall(require, "mini.icons")
+  ---@diagnostic disable-next-line: undefined-field
+  if _G.MiniIcons then -- `_G.MiniIcons` is a better check to see if the module is setup
+    return function(kind)
+      return mini_icons.get("lsp", kind)
+    end
+  end
+
+  -- fallback to `lspkind`
+  local has_lspkind, lspkind = pcall(require, "lspkind")
+  if has_lspkind then
+    return function(kind)
+      return lspkind.symbolic(kind, { mode = "symbolic " })
+    end
+  end
+
+  return false -- no icon provider
+end
+
+local icon_provider
 M.get_icon = function(bufnr, kind, collapsed)
   if collapsed then
     kind = kind .. "Collapsed"
@@ -605,9 +625,11 @@ M.get_icon = function(bufnr, kind, collapsed)
     end
   end
 
-  local has_lspkind, lspkind = pcall(require, "lspkind")
-  if has_lspkind and M.use_lspkind and not collapsed then
-    icon = lspkind.symbolic(kind, { with_text = false })
+  if icon_provider == nil then
+    icon_provider = get_icon_provider()
+  end
+  if icon_provider and not collapsed then
+    icon = icon_provider(kind)
     if icon and icon ~= "" then
       return icon
     end

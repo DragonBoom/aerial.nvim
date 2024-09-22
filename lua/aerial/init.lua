@@ -207,9 +207,9 @@ end
 ---Initialize aerial
 ---@param opts? table
 M.setup = function(opts)
-  if vim.fn.has("nvim-0.8") == 0 then
+  if vim.fn.has("nvim-0.9") == 0 then
     vim.notify_once(
-      "aerial is deprecated for Neovim <0.8. Please use the nvim-0.5 branch or upgrade Neovim",
+      "aerial is deprecated for Neovim <0.9. Please use a nvim-0.x branch or upgrade Neovim",
       vim.log.levels.ERROR
     )
     return
@@ -261,10 +261,12 @@ M.close_all = lazy("window", "close_all")
 ---Close all visible aerial windows except for the one currently focused or for the currently focused window.
 M.close_all_but_current = lazy("window", "close_all_but_current")
 
+---@class (exact) aerial.openOpts
+---@field focus? boolean If true, jump to aerial window if it is opened (default true)
+---@field direction? "left"|"right"|"float" Direction to open aerial window
+
 ---Open the aerial window for the current buffer.
----@param opts? table
----    focus boolean If true, jump to aerial window if it is opened (default true)
----    direction "left"|"right"|"float" Direction to open aerial window
+---@param opts? aerial.openOpts
 M.open = function(opts)
   do_setup()
   was_closed = false
@@ -293,9 +295,7 @@ M.open_all = lazy("window", "open_all")
 M.focus = lazy("window", "focus")
 
 ---Open or close the aerial window for the current buffer.
----@param opts? table
----    focus boolean If true, jump to aerial window if it is opened (default true)
----    direction "left"|"right"|"float" Direction to open aerial window
+---@param opts? aerial.openOpts
 M.toggle = function(opts)
   do_setup()
   opts = vim.tbl_extend("keep", opts or {}, {
@@ -328,11 +328,13 @@ M.refetch_symbols = function(bufnr)
   end
 end
 
+---@class (exact) aerial.selectOpts
+---@field index? integer The symbol to jump to. If nil, will jump to the symbol under the cursor (in the aerial buffer)
+---@field split? string Jump to the symbol in a new split. Can be "v" for vertical or "h" for horizontal. Can also be a raw command to execute (e.g. "belowright split")
+---@field jump? boolean If false and in the aerial window, do not leave the aerial window. (Default true)
+
 ---Jump to a specific symbol.
----@param opts? table
----    index? integer The symbol to jump to. If nil, will jump to the symbol under the cursor (in the aerial buffer)
----    split? string Jump to the symbol in a new split. Can be "v" for vertical or "h" for horizontal. Can also be a raw command to execute (e.g. "belowright split")
----    jump? boolean If false and in the aerial window, do not leave the aerial window. (Default true)
+---@param opts? aerial.selectOpts
 M.select = lazy("navigation", "select", true)
 
 ---Jump forwards in the symbol list.
@@ -357,15 +359,14 @@ M.prev_up = function(count)
   nav_up(-1, count)
 end
 
+---@class aerial.SymbolView : aerial.SymbolBase
+---@field icon string
+
 ---Get a list representing the symbol path to the current location.
 ---@param exact? boolean If true, only return symbols if we are exactly inside the hierarchy. When false, will return the closest symbol.
----@return table[]
+---@return aerial.SymbolView[]
 ---@note
 --- Returns empty list if none found or in an invalid buffer.
---- Items have the following keys:
----     name   The name of the symbol
----     kind   The SymbolKind of the symbol
----     icon   The icon that represents the symbol
 M.get_location = function(exact)
   do_setup()
   local config = require("aerial.config")
@@ -399,6 +400,7 @@ M.get_location = function(exact)
       name = item.name,
       lnum = item.selection_range and item.selection_range.lnum or item.lnum,
       col = item.selection_range and item.selection_range.col or item.col,
+      scope = item.scope,
     })
     item = item.parent
   end

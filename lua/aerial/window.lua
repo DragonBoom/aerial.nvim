@@ -19,11 +19,11 @@ local function create_aerial_buffer(bufnr)
   vim.api.nvim_buf_set_var(bufnr, "aerial_buffer", aer_bufnr)
   -- Set buffer options
   vim.api.nvim_buf_set_var(aer_bufnr, "source_buffer", bufnr)
-  vim.api.nvim_buf_set_option(aer_bufnr, "buftype", "nofile")
-  vim.api.nvim_buf_set_option(aer_bufnr, "bufhidden", "wipe")
-  vim.api.nvim_buf_set_option(aer_bufnr, "buflisted", false)
-  vim.api.nvim_buf_set_option(aer_bufnr, "swapfile", false)
-  vim.api.nvim_buf_set_option(aer_bufnr, "modifiable", false)
+  vim.bo[aer_bufnr].buftype = "nofile"
+  vim.bo[aer_bufnr].bufhidden = "wipe"
+  vim.bo[aer_bufnr].buflisted = false
+  vim.bo[aer_bufnr].swapfile = false
+  vim.bo[aer_bufnr].modifiable = false
 
   if config.highlight_on_hover or config.autojump then
     vim.api.nvim_create_autocmd("CursorMoved", {
@@ -106,7 +106,7 @@ local function setup_aerial_win(src_winid, aer_winid, aer_bufnr)
   vim.api.nvim_win_set_var(aer_winid, "source_win", src_winid)
   vim.api.nvim_win_set_var(src_winid, "aerial_win", aer_winid)
   -- Set the filetype only after we enter the buffer so that ftplugins behave properly
-  vim.api.nvim_buf_set_option(aer_bufnr, "filetype", "aerial")
+  vim.bo[aer_bufnr].filetype = "aerial"
   local width = vim.b[aer_bufnr].aerial_width
   if width and (not vim.w[aer_winid].aerial_set_width or config.layout.resize_to_content) then
     vim.api.nvim_win_set_width(aer_winid, width)
@@ -230,15 +230,6 @@ M.open_aerial_in_win = function(src_bufnr, src_winid, aer_winid)
   end
 end
 
----@param bufnr? integer
----@return integer|nil
-local function get_aerial_win_for_buf(bufnr)
-  local aer_bufnr = util.get_aerial_buffer(bufnr)
-  if aer_bufnr then
-    return util.buf_first_win_in_tabpage(aer_bufnr)
-  end
-end
-
 ---@param opts? {bufnr?: integer, winid?: integer}
 ---@return boolean
 M.is_open = function(opts)
@@ -248,7 +239,11 @@ M.is_open = function(opts)
   if opts.winid then
     return util.get_aerial_win(opts.winid) ~= nil
   else
-    return get_aerial_win_for_buf(opts.bufnr) ~= nil
+    local aer_bufnr = util.get_aerial_buffer(opts.bufnr)
+    if aer_bufnr then
+      return util.buf_first_win_in_tabpage(aer_bufnr) ~= nil
+    end
+    return false
   end
 end
 
@@ -323,7 +318,7 @@ end
 ---@param focus? boolean
 ---@param direction? "left"|"right"|"float"
 M.open = function(focus, direction)
-  if util.is_aerial_buffer(0) or util.is_ignored_win() then
+  if util.is_aerial_buffer(0) then
     return
   end
   local bufnr, aer_bufnr = util.get_buffers()
@@ -432,6 +427,7 @@ M.get_symbol_position = function(bufdata, lnum, col, include_hidden)
 
   local symbol
   for _, item in bufdata:iter({ skip_hidden = not include_hidden }) do
+    ---@diagnostic disable-next-line: param-type-mismatch
     local cmp, inside = compare(item, lnum, col)
     if inside then
       exact_symbol = item
@@ -538,6 +534,9 @@ M.center_symbol_in_view = function(buffer)
     return
   end
   local bufdata = data.get_or_create(bufnr)
+  if not bufdata.last_win then
+    return
+  end
   if vim.api.nvim_buf_is_valid(aer_bufnr) and vim.api.nvim_win_is_valid(bufdata.last_win) then
     local last_position = bufdata.positions[bufdata.last_win]
     if last_position then
